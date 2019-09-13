@@ -314,11 +314,11 @@ func (e *MultiError) Error() string {
 // The type is never exposed to external communication and the
 // embedded alert has to be sanitized beforehand.
 type Alert struct {
-	model.Alert
+	model.Alert `json:"modelAlert"`
 
 	// The authoritative timestamp.
-	UpdatedAt time.Time
-	Timeout   bool
+	UpdatedAt time.Time `json:"updatedAt"`
+	Timeout   bool      `json:"timeout"`
 }
 
 // AlertSlice is a sortable slice of Alerts.
