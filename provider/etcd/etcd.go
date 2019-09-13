@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/etcd/clientv3"
+
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/common/model"
@@ -77,6 +79,17 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l 
 		a.mtx.Unlock()
 	})
 	a.alerts.Run(ctx)
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"localhost:2379"},
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		level.Error(a.logger).Log("msg", "Failed to Connect to Etcd", "err", err)
+	} else {
+		level.Info(a.logger).Log("msg", "Connected to Etcd")
+	}
+	defer cli.Close()
 
 	return a, nil
 }
