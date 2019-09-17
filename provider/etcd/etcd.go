@@ -15,10 +15,12 @@ package etcd
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"google.golang.org/grpc"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -41,6 +43,9 @@ type Alerts struct {
 	next      int
 
 	logger log.Logger
+
+	etcdMtx    sync.Mutex
+	etcdClient *clientv3.Client
 }
 
 type listeningAlerts struct {
@@ -49,7 +54,7 @@ type listeningAlerts struct {
 }
 
 // NewAlerts returns a new alert provider.
-func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l log.Logger, alertEtcdServers []string, alertEtcdPrefix string) (*Alerts, error) {
+func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l log.Logger, etcdEndpoints []string, etcdPrefix string) (*Alerts, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	a := &Alerts{
 		alerts:    store.NewAlerts(intervalGC),
@@ -80,16 +85,8 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l 
 	})
 	a.alerts.Run(ctx)
 
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{"localhost:2379"},
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		level.Error(a.logger).Log("msg", "Failed to Connect to Etcd", "err", err)
-	} else {
-		level.Info(a.logger).Log("msg", "Connected to Etcd")
-	}
-	defer cli.Close()
+	// initialize etcd client and run loops
+	a.etcdRun(ctx, etcdEndpoints, etcdPrefix)
 
 	return a, nil
 }
@@ -192,3 +189,63 @@ func (a *Alerts) Put(alerts ...*types.Alert) error {
 
 	return nil
 }
+
+
+func (a *Alerts) etcdRun(ctx context.Context, etcdEndpoints []string, etcdPrefix string) {
+
+	// create the configuration
+	etcdConfig := clientv3.Config{
+		Endpoints:        etcdEndpoints,
+		AutoSyncInterval: 60 * time.Second,
+		DialTimeout:      10 * time.Second,
+		DialOptions:      []grpc.DialOption{grpc.WithBlock()}, // block until connect
+	}
+
+	// create the client
+	client, err := clientv3.New(etcdConfig)
+	if err != nil {
+		// On startup, if we cannot connect to the etcd cluster, then fail hard so that the
+		// user may address a potential configuration issue.  Once the clientv3 connects
+		// successfully, clientv3 will reconnect to the etcd cluster as it goes down or up,
+		// or into or out of network connectivity.
+		level.Error(a.logger).Log("msg", "Etcd connection failed", "err", err)
+		os.Exit(1)
+	} else {
+		level.Info(a.logger).Log("msg", "Etcd connection successful")
+	}
+	a.etcdMtx.Lock()
+	a.etcdClient = client
+	a.etcdMtx.Unlock()
+
+	checkInterval := 1 * time.Second
+	go func(t *time.Ticker) {
+		// ensure the client will be cleaned up
+		defer func() {
+			a.etcdMtx.Lock()
+			if a.etcdClient != nil {
+				a.etcdClient.Close()
+				a.etcdClient = nil
+			}
+			a.etcdMtx.Unlock()
+			level.Info(a.logger).Log("msg", "Etcd connection shut down")
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				// Ensures etcd watch activated
+				// put logic for reading from DB
+				// ctx := clientv3.WithRequireLeader(ctx)
+			}
+		}
+	}(time.NewTicker(checkInterval))
+}
+
+/*
+NOTES
+https://github.com/etcd-io/etcd/blob/master/clientv3/example_test.go
+https://godoc.org/github.com/coreos/etcd/clientv3#WithRequireLeader
+https://github.com/etcd-io/etcd/blob/master/clientv3/integration/watch_test.go
+*/

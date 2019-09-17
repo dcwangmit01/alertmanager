@@ -16,6 +16,7 @@ package etcd
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -344,4 +345,42 @@ func alertsEqual(a1, a2 *types.Alert) bool {
 		return false
 	}
 	return a1.Timeout == a2.Timeout
+}
+
+func TestEtcdConnectWriteRead(t *testing.T) {
+	prefix := "am/test/TestAlertsGC/alerts-"
+	marker := types.NewMarker(prometheus.NewRegistry())
+	debug := true
+
+	var logger log.Logger
+	if debug {
+		w := log.NewSyncWriter(os.Stderr)
+		logger = log.NewJSONLogger(w)
+	} else {
+		logger = log.NewNopLogger()
+	}
+
+	alerts, err := NewAlerts(context.Background(), marker, 200*time.Millisecond, logger,
+		[]string{"localhost:2379"}, prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	timeStr := time.Now().String()
+	alerts.etcdMtx.Lock()
+	_, err = alerts.etcdClient.Put(context.TODO(), prefix+"time", timeStr)
+	alerts.etcdMtx.Unlock()
+	if err != nil {
+		t.Error("Failed to Put key to etcd")
+	}
+
+	alerts.etcdMtx.Lock()
+	resp, err := alerts.etcdClient.Get(context.TODO(), prefix+"time")
+	alerts.etcdMtx.Unlock()
+	if err != nil {
+		t.Error("Failed to Get key to etcd")
+	}
+	for _, ev := range resp.Kvs {
+		fmt.Printf("%s : %s\n", ev.Key, ev.Value)
+	}
 }

@@ -188,7 +188,7 @@ func run() int {
 
 		alertGCInterval      = kingpin.Flag("alerts.gc-interval", "Interval between alert GC.").Default("30m").Duration()
 		alertStorageProvider = kingpin.Flag("alerts.storage.provider", "Alert storage \"mem\" or \"etcd\".").Default("mem").String()
-		alertEtcdServers     = kingpin.Flag("alerts.etcd.server", "Etcd servers used for alert storage(may be repeated).").Default("localhost:2379").Strings()
+		alertEtcdEndpoints   = kingpin.Flag("alerts.etcd.endpoint", "Etcd server used for alert storage(may be repeated for each in etcd cluster).").Default("localhost:2379").Strings()
 		alertEtcdPrefix      = kingpin.Flag("alerts.etcd.prefix", "String prefix for storing AM alerts in etc").Default("am/alerts-").String()
 
 		externalURL    = kingpin.Flag("web.external-url", "The URL under which Alertmanager is externally reachable (for example, if Alertmanager is served via a reverse proxy). Used for generating relative and absolute links back to Alertmanager itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Alertmanager. If omitted, relevant URL components will be derived automatically.").String()
@@ -327,7 +327,7 @@ func run() int {
 	if *alertStorageProvider == "mem" {
 		alerts, err = mem.NewAlerts(context.Background(), marker, *alertGCInterval, logger)
 	} else if *alertStorageProvider == "etcd" {
-		alerts, err = etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdServers, *alertEtcdPrefix)
+		alerts, err = etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdEndpoints, *alertEtcdPrefix)
 	} else {
 		level.Error(logger).Log("Unknown alerts.storage.provider", err)
 		return 1
