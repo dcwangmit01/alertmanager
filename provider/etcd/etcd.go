@@ -48,9 +48,10 @@ type Alerts struct {
 
 	logger log.Logger
 
-	etcdMtx    sync.Mutex
-	etcdClient *clientv3.Client
-	etcdPrefix string
+	etcdMtx       sync.Mutex
+	etcdClient    *clientv3.Client
+	etcdPrefix    string
+	etcdEndpoints []string
 }
 
 type listeningAlerts struct {
@@ -92,7 +93,8 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l 
 
 	// initialize etcd client and run loops
 	a.etcdPrefix = etcdPrefix
-	a.etcdRun(ctx, etcdEndpoints)
+	a.etcdEndpoints = etcdEndpoints
+	a.etcdRunClient(ctx)
 
 	return a, nil
 }
@@ -200,11 +202,11 @@ func (a *Alerts) Put(alerts ...*types.Alert) error {
 	return nil
 }
 
-func (a *Alerts) etcdRun(ctx context.Context, etcdEndpoints []string) {
+func (a *Alerts) etcdRunClient(ctx context.Context) {
 
 	// create the configuration
 	etcdConfig := clientv3.Config{
-		Endpoints:        etcdEndpoints,
+		Endpoints:        a.etcdEndpoints,
 		AutoSyncInterval: 60 * time.Second,
 		DialTimeout:      10 * time.Second,
 		DialOptions:      []grpc.DialOption{grpc.WithBlock()}, // block until connect
@@ -348,13 +350,9 @@ func (a *Alerts) etcdGet(fp model.Fingerprint) (*types.Alert, error) {
 	return alert, nil
 }
 
-func (a *Alerts) etcdWatch(ctx context.Context) {
-	// https://godoc.org/github.com/coreos/etcd/clientv3#Watcher
-
+func (a *Alerts) EtcdRunWatch(ctx context.Context) {
 	// watch for alert changes in etcd and writes them back to our
 	// local alert state
-
-	//
 	ctx = clientv3.WithRequireLeader(ctx)
 
 	go func() {
@@ -373,6 +371,32 @@ func (a *Alerts) etcdWatch(ctx context.Context) {
 				}
 				a.Put(alert)
 			}
+		}
+	}()
+}
+
+func (a *Alerts) EtcdRunLoadAllAlerts(ctx context.Context) {
+	go func() {
+		for {
+			a.etcdMtx.Lock()
+			resp, err := a.etcdClient.Get(ctx, a.etcdPrefix, clientv3.WithPrefix())
+			a.etcdMtx.Unlock()
+			if err != nil {
+				level.Error(a.logger).Log("msg", "Error fetching all alerts etcd", "err", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			for _, ev := range resp.Kvs {
+				level.Debug(a.logger).Log("msg", "get received",
+					"key", fmt.Sprintf("%q", ev.Key), "value", fmt.Sprintf("%q", ev.Value))
+				alert, err := etcdUnmarshallAlert(string(ev.Value))
+				if err != nil {
+					continue
+				}
+				a.Put(alert)
+			}
+			break
 		}
 	}()
 }

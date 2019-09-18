@@ -418,7 +418,7 @@ func TestEtcdWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	alerts.etcdWatch(context.Background())
+	alerts.EtcdRunWatch(context.Background())
 	iterator := alerts.Subscribe()
 	time.Sleep(100 * time.Millisecond) // allow the subscribe time to kick in
 

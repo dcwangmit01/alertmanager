@@ -326,14 +326,20 @@ func run() int {
 	var alerts provider.Alerts
 	if *alertStorageProvider == "mem" {
 		alerts, err = mem.NewAlerts(context.Background(), marker, *alertGCInterval, logger)
+		if err != nil {
+			level.Error(logger).Log("err", err)
+			return 1
+		}
 	} else if *alertStorageProvider == "etcd" {
 		alerts, err = etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdEndpoints, *alertEtcdPrefix)
+		if err != nil {
+			level.Error(logger).Log("err", err)
+			return 1
+		}
+		alerts.EtcdWatchRun(ctx)
+		alerts.EtcdRunLoadAllAlerts(ctx)
 	} else {
 		level.Error(logger).Log("Unknown alerts.storage.provider", err)
-		return 1
-	}
-	if err != nil {
-		level.Error(logger).Log("err", err)
 		return 1
 	}
 	defer alerts.Close()
