@@ -38,7 +38,8 @@ type Alerts struct {
 	listeners map[int]listeningAlerts
 	next      int
 
-	logger     log.Logger
+	logger log.Logger
+
 	EtcdClient *EtcdClient
 }
 
@@ -176,8 +177,7 @@ func (a *Alerts) Put(alerts ...*types.Alert) error {
 			continue
 		}
 		if err := a.EtcdClient.CheckAndPut(alert); err != nil {
-			level.Error(a.logger).Log("msg", "error on etcdPut alert", "err", err)
-			continue
+			// proceed intentionally without error
 		}
 
 		a.mtx.Lock()
