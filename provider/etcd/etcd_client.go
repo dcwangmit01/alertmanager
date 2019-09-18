@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 /* HOW IT WORKS
 
 Sequence of Events
@@ -38,14 +37,14 @@ Ongoing Operation (Async)
 package etcd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"context"
-	"time"
 	"os"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"google.golang.org/grpc"
@@ -124,7 +123,6 @@ func NewEtcdClient(ctx context.Context, a *Alerts, endpoints []string, prefix st
 	}()
 	return ec, nil
 }
-
 
 func (ec *EtcdClient) CheckAndPut(alert *types.Alert) error {
 	// Reduce writes to Etcd.  Only put to Etcd if the current alert is different than the same
