@@ -10,6 +10,7 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 
+	"github.com/kylelemons/godebug/pretty"
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -58,7 +59,7 @@ func TestEtcdWriteReadAlert(t *testing.T) {
 		t.Errorf("etcdGet failed: %s", err)
 	}
 	if !alertsEqual(a1, a2) {
-		t.Error("alert struct comparison failed")
+		t.Errorf("Unexpected alert: %s", pretty.Compare(a1, a2))
 	}
 }
 
@@ -83,7 +84,7 @@ func TestEtcdMarshallUnmarshallAlert(t *testing.T) {
 		t.Error("alert string comparison failed")
 	}
 	if !alertsEqual(a1, a2) {
-		t.Error("alert struct comparison failed")
+		t.Errorf("Unexpected alert: %s", pretty.Compare(a1, a2))
 	}
 }
 
@@ -113,7 +114,7 @@ func TestEtcdRunWatch(t *testing.T) {
 	index := 0
 	for alert := range iterator.Next() {
 		if !alertsEqual(alert, alertsToSend[index]) {
-			t.Error("alert struct comparison failed")
+			t.Errorf("Unexpected alert: %s", pretty.Compare(alert, alertsToSend[index]))
 		}
 		index += 1
 		if index == len(alertsToSend) {
@@ -133,11 +134,7 @@ func TestEtcdRunLoadAllAlerts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	alerts.EtcdClient.RunWatch(context.Background())
-	iterator := alerts.Subscribe()
-	time.Sleep(100 * time.Millisecond) // wait for subscribe
-
-	// send all of the alerts
+	// put some alerts into etcd first
 	alertsToSend := []*types.Alert{fakeAlert(), fakeAlert(), fakeAlert()}
 	for _, a := range alertsToSend {
 		if err := alerts.EtcdClient.Put(a); err != nil {
@@ -145,14 +142,27 @@ func TestEtcdRunLoadAllAlerts(t *testing.T) {
 		}
 	}
 
-	// read the alerts back in order
+	iterator := alerts.Subscribe()
+	time.Sleep(100 * time.Millisecond) // wait for subscribe
+
+	// instruct AM to read back all alerts from etcd
+	alerts.EtcdClient.RunLoadAllAlerts(context.Background())
+
+	// read the alerts back.  ordering is not guaranteed
+	expectedAlerts := map[model.Fingerprint]*types.Alert{}
+	for _, a := range alertsToSend {
+		expectedAlerts[a.Fingerprint()] = a
+	}
+
 	index := 0
-	for alert := range iterator.Next() {
-		if !alertsEqual(alert, alertsToSend[index]) {
-			t.Error("alert struct comparison failed")
+	for actual := range iterator.Next() {
+		index++
+
+		expected := expectedAlerts[actual.Fingerprint()]
+		if !alertsEqual(actual, expected) {
+			t.Errorf("Unexpected alert: %s", pretty.Compare(actual, expected))
 		}
-		index += 1
-		if index == len(alertsToSend) {
+		if index == len(expectedAlerts) {
 			break
 		}
 	}
