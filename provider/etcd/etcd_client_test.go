@@ -17,33 +17,33 @@ import (
 )
 
 var (
+	debug = true
 	fakeAlertCounter = 0
 
 	etcdEndpoints   = []string{"localhost:2379"}
 	etcdDialTimeout = 5 * time.Second
 	etcdPrefix      = "am/test/alerts-"
 	alertGcInterval = 200 * time.Millisecond
+
+	etcdLogger log.Logger
 )
 
 func init() {
 	etcdReset()
+	if debug {
+		w := log.NewSyncWriter(os.Stderr)
+		etcdLogger = log.NewJSONLogger(w)
+	} else {
+		etcdLogger = log.NewNopLogger()
+	}
+
 }
 
 func TestEtcdWriteReadAlert(t *testing.T) {
 	defer etcdReset()
 
 	marker := types.NewMarker(prometheus.NewRegistry())
-	debug := true
-
-	var logger log.Logger
-	if debug {
-		w := log.NewSyncWriter(os.Stderr)
-		logger = log.NewJSONLogger(w)
-	} else {
-		logger = log.NewNopLogger()
-	}
-
-	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, logger,
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
 		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
@@ -91,17 +91,7 @@ func TestEtcdRunWatch(t *testing.T) {
 	defer etcdReset()
 
 	marker := types.NewMarker(prometheus.NewRegistry())
-	debug := true
-
-	var logger log.Logger
-	if debug {
-		w := log.NewSyncWriter(os.Stderr)
-		logger = log.NewJSONLogger(w)
-	} else {
-		logger = log.NewNopLogger()
-	}
-
-	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, logger,
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
 		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +99,43 @@ func TestEtcdRunWatch(t *testing.T) {
 
 	alerts.EtcdClient.RunWatch(context.Background())
 	iterator := alerts.Subscribe()
-	time.Sleep(100 * time.Millisecond) // allow the subscribe time to kick in
+	time.Sleep(100 * time.Millisecond) // wait for subscribe
+
+	// send all of the alerts
+	alertsToSend := []*types.Alert{fakeAlert(), fakeAlert(), fakeAlert()}
+	for _, a := range alertsToSend {
+		if err := alerts.EtcdClient.Put(a); err != nil {
+			t.Errorf("etcdPut failed: %s", err)
+		}
+	}
+
+	// read the alerts back in order
+	index := 0
+	for alert := range iterator.Next() {
+		if !alertsEqual(alert, alertsToSend[index]) {
+			t.Error("alert struct comparison failed")
+		}
+		index += 1
+		if index == len(alertsToSend) {
+			break
+		}
+	}
+}
+
+
+func TestEtcdRunLoadAllAlerts(t *testing.T) {
+	defer etcdReset()
+
+	marker := types.NewMarker(prometheus.NewRegistry())
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
+		etcdEndpoints, etcdPrefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	alerts.EtcdClient.RunWatch(context.Background())
+	iterator := alerts.Subscribe()
+	time.Sleep(100 * time.Millisecond) // wait for subscribe
 
 	// send all of the alerts
 	alertsToSend := []*types.Alert{fakeAlert(), fakeAlert(), fakeAlert()}
