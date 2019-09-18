@@ -17,8 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -345,10 +345,10 @@ func TestEtcdWriteReadAlert(t *testing.T) {
 	}
 
 	a1 := fakeAlert()
-	if err := alerts.etcdPut(a1); err != nil {
+	if err := alerts.EtcdClient.Put(a1); err != nil {
 		t.Errorf("etcdPut failed: %s", err)
 	}
-	a2, err := alerts.etcdGet(a1.Fingerprint())
+	a2, err := alerts.EtcdClient.Get(a1.Fingerprint())
 	if err != nil {
 		t.Errorf("etcdGet failed: %s", err)
 	}
@@ -365,13 +365,13 @@ func TestEtcdMarshallUnmarshallAlert(t *testing.T) {
 	var a1, a2 *types.Alert
 
 	a1 = fakeAlert()
-	if str1, err = etcdMarshallAlert(a1); err != nil {
+	if str1, err = MarshallAlert(a1); err != nil {
 		t.Errorf("marshall alert failed: %s", err)
 	}
-	if a2, err = etcdUnmarshallAlert(str1); err != nil {
+	if a2, err = UnmarshallAlert(str1); err != nil {
 		t.Errorf("unmarshall alert failed: %s", err)
 	}
-	if str2, err = etcdMarshallAlert(a2); err != nil {
+	if str2, err = MarshallAlert(a2); err != nil {
 		t.Errorf("re-marshall alert failed: %s", err)
 	}
 	if str1 != str2 {
@@ -382,7 +382,7 @@ func TestEtcdMarshallUnmarshallAlert(t *testing.T) {
 	}
 }
 
-func TestEtcdWatch(t *testing.T) {
+func TestEtcdRunWatch(t *testing.T) {
 	defer etcdReset()
 
 	marker := types.NewMarker(prometheus.NewRegistry())
@@ -402,14 +402,14 @@ func TestEtcdWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	alerts.EtcdRunWatch(context.Background())
+	alerts.EtcdClient.RunWatch(context.Background())
 	iterator := alerts.Subscribe()
 	time.Sleep(100 * time.Millisecond) // allow the subscribe time to kick in
 
 	// send all of the alerts
 	alertsToSend := []*types.Alert{fakeAlert(), fakeAlert(), fakeAlert()}
 	for _, a := range alertsToSend {
-		if err := alerts.etcdPut(a); err != nil {
+		if err := alerts.EtcdClient.Put(a); err != nil {
 			t.Errorf("etcdPut failed: %s", err)
 		}
 	}
