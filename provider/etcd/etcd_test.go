@@ -15,6 +15,7 @@ package etcd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -22,6 +23,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/coreos/etcd/clientv3"
 
 	"github.com/go-kit/kit/log"
 	"github.com/kylelemons/godebug/pretty"
@@ -36,45 +39,20 @@ var (
 	t0 = time.Now()
 	t1 = t0.Add(100 * time.Millisecond)
 
-	alert1 = &types.Alert{
-		Alert: model.Alert{
-			Labels:       model.LabelSet{"bar": "foo"},
-			Annotations:  model.LabelSet{"foo": "bar"},
-			StartsAt:     t0,
-			EndsAt:       t1,
-			GeneratorURL: "http://example.com/prometheus",
-		},
-		UpdatedAt: t0,
-		Timeout:   false,
-	}
+	fakeAlertCounter = 0
+	alert1           = fakeAlert()
+	alert2           = fakeAlert()
+	alert3           = fakeAlert()
 
-	alert2 = &types.Alert{
-		Alert: model.Alert{
-			Labels:       model.LabelSet{"bar": "foo2"},
-			Annotations:  model.LabelSet{"foo": "bar2"},
-			StartsAt:     t0,
-			EndsAt:       t1,
-			GeneratorURL: "http://example.com/prometheus",
-		},
-		UpdatedAt: t0,
-		Timeout:   false,
-	}
-
-	alert3 = &types.Alert{
-		Alert: model.Alert{
-			Labels:       model.LabelSet{"bar": "foo3"},
-			Annotations:  model.LabelSet{"foo": "bar3"},
-			StartsAt:     t0,
-			EndsAt:       t1,
-			GeneratorURL: "http://example.com/prometheus",
-		},
-		UpdatedAt: t0,
-		Timeout:   false,
-	}
+	etcdEndpoints   = []string{"localhost:2379"}
+	etcdDialTimeout = 5 * time.Second
+	etcdPrefix      = "am/test/alerts-"
+	alertGcInterval = 200 * time.Millisecond
 )
 
 func init() {
 	pretty.CompareConfig.IncludeUnexported = true
+	etcdReset()
 }
 
 // TestAlertsSubscribePutStarvation tests starvation of `iterator.Close` and
@@ -86,7 +64,7 @@ func init() {
 func TestAlertsSubscribePutStarvation(t *testing.T) {
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, 30*time.Minute, log.NewNopLogger(),
-		[]string{"localhost:2379"}, "am/test/TestAlertsSubscribePutStarvation/alerts-")
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +116,7 @@ func TestAlertsSubscribePutStarvation(t *testing.T) {
 func TestAlertsPut(t *testing.T) {
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, 30*time.Minute, log.NewNopLogger(),
-		[]string{"localhost:2379"}, "am/test/TestAlertsPut/alerts-")
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +145,7 @@ func TestAlertsSubscribe(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	alerts, err := NewAlerts(ctx, marker, 30*time.Minute, log.NewNopLogger(),
-		[]string{"localhost:2379"}, "am/test/TestAlertsSubscribe/alerts-")
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +223,7 @@ func TestAlertsSubscribe(t *testing.T) {
 func TestAlertsGetPending(t *testing.T) {
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, 30*time.Minute, log.NewNopLogger(),
-		[]string{"localhost:2379"}, "am/test/TestAlertsGetPending/alerts-")
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,8 +266,8 @@ func TestAlertsGetPending(t *testing.T) {
 
 func TestAlertsGC(t *testing.T) {
 	marker := types.NewMarker(prometheus.NewRegistry())
-	alerts, err := NewAlerts(context.Background(), marker, 200*time.Millisecond, log.NewNopLogger(),
-		[]string{"localhost:2379"}, "am/test/TestAlertsGC/alerts-")
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, log.NewNopLogger(),
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +325,8 @@ func alertsEqual(a1, a2 *types.Alert) bool {
 }
 
 func TestEtcdWriteReadAlert(t *testing.T) {
-	prefix := "am/test/TestEtcdConnectWriteReadKey/alerts-"
+	defer etcdReset()
+
 	marker := types.NewMarker(prometheus.NewRegistry())
 	debug := true
 
@@ -359,48 +338,53 @@ func TestEtcdWriteReadAlert(t *testing.T) {
 		logger = log.NewNopLogger()
 	}
 
-	alerts, err := NewAlerts(context.Background(), marker, 200*time.Millisecond, logger,
-		[]string{"localhost:2379"}, prefix)
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, logger,
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := alerts.etcdPut(alert1); err != nil {
+	a1 := fakeAlert()
+	if err := alerts.etcdPut(a1); err != nil {
 		t.Errorf("etcdPut failed: %s", err)
 	}
-	tmpAlert, err := alerts.etcdGet(alert1.Fingerprint())
+	a2, err := alerts.etcdGet(a1.Fingerprint())
 	if err != nil {
 		t.Errorf("etcdGet failed: %s", err)
 	}
-	if !alertsEqual(alert1, tmpAlert) {
+	if !alertsEqual(a1, a2) {
 		t.Error("alert struct comparison failed")
 	}
 }
 
 func TestEtcdMarshallUnmarshallAlert(t *testing.T) {
-	var str1, str2 string
-	var tmpAlert *types.Alert
-	var err error
+	defer etcdReset()
 
-	if str1, err = etcdMarshallAlert(alert1); err != nil {
+	var str1, str2 string
+	var err error
+	var a1, a2 *types.Alert
+
+	a1 = fakeAlert()
+	if str1, err = etcdMarshallAlert(a1); err != nil {
 		t.Errorf("marshall alert failed: %s", err)
 	}
-	if tmpAlert, err = etcdUnmarshallAlert(str1); err != nil {
+	if a2, err = etcdUnmarshallAlert(str1); err != nil {
 		t.Errorf("unmarshall alert failed: %s", err)
 	}
-	if str2, err = etcdMarshallAlert(tmpAlert); err != nil {
+	if str2, err = etcdMarshallAlert(a2); err != nil {
 		t.Errorf("re-marshall alert failed: %s", err)
 	}
 	if str1 != str2 {
 		t.Error("alert string comparison failed")
 	}
-	if !alertsEqual(alert1, tmpAlert) {
+	if !alertsEqual(a1, a2) {
 		t.Error("alert struct comparison failed")
 	}
 }
 
 func TestEtcdWatch(t *testing.T) {
-	prefix := "am/test/TestEtcdWatch/alerts-"
+	defer etcdReset()
+
 	marker := types.NewMarker(prometheus.NewRegistry())
 	debug := true
 
@@ -412,8 +396,8 @@ func TestEtcdWatch(t *testing.T) {
 		logger = log.NewNopLogger()
 	}
 
-	alerts, err := NewAlerts(context.Background(), marker, 200*time.Millisecond, logger,
-		[]string{"localhost:2379"}, prefix)
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, logger,
+		etcdEndpoints, etcdPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +407,7 @@ func TestEtcdWatch(t *testing.T) {
 	time.Sleep(100 * time.Millisecond) // allow the subscribe time to kick in
 
 	// send all of the alerts
-	alertsToSend := []*types.Alert{alert1, alert2, alert3}
+	alertsToSend := []*types.Alert{fakeAlert(), fakeAlert(), fakeAlert()}
 	for _, a := range alertsToSend {
 		if err := alerts.etcdPut(a); err != nil {
 			t.Errorf("etcdPut failed: %s", err)
@@ -441,4 +425,56 @@ func TestEtcdWatch(t *testing.T) {
 			break
 		}
 	}
+}
+
+func etcdReset() {
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   etcdEndpoints,
+		DialTimeout: etcdDialTimeout,
+	})
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		os.Exit(1)
+	}
+	defer cli.Close()
+
+	// delete the keys
+	_, err = cli.Delete(context.Background(), etcdPrefix, clientv3.WithPrefix())
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func fakeAlert() *types.Alert {
+	fakeAlertCounter += 1
+
+	labelSetJSON := fmt.Sprintf(`{ "labelSet": {
+		"foo%d": "bar%d",
+                "time": "%s"
+	}}`, fakeAlertCounter, fakeAlertCounter, time.Now().String())
+
+	type testConfig struct {
+		LabelSet model.LabelSet `yaml:"labelSet,omitempty"`
+	}
+
+	var c testConfig
+	err := json.Unmarshal([]byte(labelSetJSON), &c)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		os.Exit(1)
+	}
+
+	a := &types.Alert{
+		Alert: model.Alert{
+			Labels:       c.LabelSet,
+			Annotations:  model.LabelSet{"foo": "bar"},
+			StartsAt:     t0,
+			EndsAt:       t1,
+			GeneratorURL: "http://example.com/prometheus",
+		},
+		UpdatedAt: t0,
+		Timeout:   false,
+	}
+	return a
 }
