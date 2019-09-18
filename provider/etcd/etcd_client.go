@@ -137,10 +137,8 @@ func (ec *EtcdClient) CheckAndPut(alert *types.Alert) error {
 
 	etcdAlert, err := ec.Get(alert.Fingerprint())
 	if err == nil {
-		level.Debug(ec.logger).Log("msg", "CheckAndPut found alert already exists in etcd")
 		if AlertsEqualExceptForUpdatedAt(etcdAlert, alert) {
-			level.Debug(ec.logger).Log("msg", "CheckAndPut found alert equals that found in etcd")
-			return nil
+			return nil // skip write to etcd
 		}
 	}
 

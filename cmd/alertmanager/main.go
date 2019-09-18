@@ -331,13 +331,18 @@ func run() int {
 			return 1
 		}
 	} else if *alertStorageProvider == "etcd" {
-		alerts, err = etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdEndpoints, *alertEtcdPrefix)
+		etcdAlerts, err := etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdEndpoints, *alertEtcdPrefix)
 		if err != nil {
 			level.Error(logger).Log("err", err)
 			return 1
 		}
-		alerts.EtcdWatchRun(ctx)
-		alerts.EtcdRunLoadAllAlerts(ctx)
+		alerts = etcdAlerts
+		go func() {
+			// delay start the run etcd loops so subscribers have time to initialize
+			time.Sleep(5 * time.Second)
+			etcdAlerts.EtcdClient.RunWatch(context.Background())
+			etcdAlerts.EtcdClient.RunLoadAllAlerts(context.Background())
+		}()
 	} else {
 		level.Error(logger).Log("Unknown alerts.storage.provider", err)
 		return 1

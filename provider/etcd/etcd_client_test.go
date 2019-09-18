@@ -10,8 +10,8 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 
-	"github.com/kylelemons/godebug/pretty"
 	"github.com/go-kit/kit/log"
+	"github.com/kylelemons/godebug/pretty"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
@@ -19,6 +19,7 @@ import (
 
 var (
 	debug = true
+
 	fakeAlertCounter = 0
 
 	etcdEndpoints   = []string{"localhost:2379"}
@@ -123,7 +124,6 @@ func TestEtcdRunWatch(t *testing.T) {
 	}
 }
 
-
 func TestEtcdRunLoadAllAlerts(t *testing.T) {
 	defer etcdReset()
 
@@ -154,15 +154,13 @@ func TestEtcdRunLoadAllAlerts(t *testing.T) {
 		expectedAlerts[a.Fingerprint()] = a
 	}
 
-	index := 0
 	for actual := range iterator.Next() {
-		index++
-
 		expected := expectedAlerts[actual.Fingerprint()]
 		if !alertsEqual(actual, expected) {
 			t.Errorf("Unexpected alert: %s", pretty.Compare(actual, expected))
 		}
-		if index == len(expectedAlerts) {
+		delete(expectedAlerts, actual.Fingerprint())
+		if len(expectedAlerts) == 0 {
 			break
 		}
 	}
