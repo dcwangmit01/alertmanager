@@ -176,6 +176,46 @@ func TestEtcdRunLoadAllAlerts(t *testing.T) {
 	}
 }
 
+func TestEtcdGarbageCollection(t *testing.T) {
+	defer etcdReset()
+
+	marker := types.NewMarker(prometheus.NewRegistry())
+	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
+		etcdEndpoints, etcdPrefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDuration := 1000 * time.Millisecond
+	startsAt := time.Now()
+	endsAt := t0.Add(testDuration)
+
+	// write to alert store
+	a1 := fakeAlertWithTime(startsAt, endsAt)
+	if err := alerts.Put(a1); err != nil {
+		t.Errorf("alertPut failed: %s", err)
+	}
+
+	time.Sleep(testDuration / 2)
+
+	// ensure write-through to etcd
+	a2, err := alerts.EtcdClient.Get(a1.Fingerprint())
+	if err != nil {
+		t.Errorf("etcdGet failed: %s", err)
+	}
+	if !alertsEqual(a1, a2) {
+		t.Errorf("Unexpected alert: %s", pretty.Compare(a1, a2))
+	}
+
+	time.Sleep(testDuration/2 + alertGcInterval*2)
+
+	// ensure expiration in etcd
+	_, err = alerts.EtcdClient.Get(a1.Fingerprint())
+	if err == nil {
+		t.Errorf("etcdGet SHOULD HAVE failed")
+	}
+}
+
 func etcdReset() {
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   etcdEndpoints,
@@ -196,6 +236,12 @@ func etcdReset() {
 }
 
 func fakeAlert() *types.Alert {
+	startsAt := time.Now()
+	endsAt := t0.Add(10 * time.Second)
+	return fakeAlertWithTime(startsAt, endsAt)
+}
+
+func fakeAlertWithTime(startsAt time.Time, endsAt time.Time) *types.Alert {
 	fakeAlertCounter += 1
 
 	labelSetJSON := fmt.Sprintf(`{ "labelSet": {
@@ -218,11 +264,11 @@ func fakeAlert() *types.Alert {
 		Alert: model.Alert{
 			Labels:       c.LabelSet,
 			Annotations:  model.LabelSet{"foo": "bar"},
-			StartsAt:     t0,
-			EndsAt:       t1,
+			StartsAt:     startsAt,
+			EndsAt:       endsAt,
 			GeneratorURL: "http://example.com/prometheus",
 		},
-		UpdatedAt: t0,
+		UpdatedAt: startsAt,
 		Timeout:   false,
 	}
 	return a

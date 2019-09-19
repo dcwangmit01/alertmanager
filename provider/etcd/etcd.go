@@ -65,7 +65,9 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l 
 			// As we don't persist alerts, we no longer consider them after
 			// they are resolved. Alerts waiting for resolved notifications are
 			// held in memory in aggregation groups redundantly.
-			m.Delete(alert.Fingerprint())
+			fp := alert.Fingerprint()
+			m.Delete(fp)
+			a.EtcdClient.Del(fp)
 		}
 
 		a.mtx.Lock()

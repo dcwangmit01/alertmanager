@@ -241,11 +241,13 @@ func (ec *EtcdClient) RunWatch(ctx context.Context) {
 			for _, ev := range wresp.Events {
 				level.Debug(ec.logger).Log("msg", "watch received",
 					"type", ev.Type, "key", fmt.Sprintf("%q", ev.Kv.Key), "value", fmt.Sprintf("%q", ev.Kv.Value))
-				alert, err := UnmarshallAlert(string(ev.Kv.Value))
-				if err != nil {
-					continue
-				}
-				ec.alerts.Put(alert)
+				if fmt.Sprintf("%s", ev.Type) == "PUT" {
+					alert, err := UnmarshallAlert(string(ev.Kv.Value))
+					if err != nil {
+						continue
+					}
+					ec.alerts.Put(alert)
+				} // else, ignore all other etcd operations, especially DELETE
 			}
 		}
 	}()
