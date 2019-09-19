@@ -38,10 +38,9 @@ func init() {
 	} else {
 		etcdLogger = log.NewNopLogger()
 	}
-
 }
 
-func TestEtcdWriteReadAlert(t *testing.T) {
+func TestEtcdWriteReadDeleteAlert(t *testing.T) {
 	defer etcdReset()
 
 	marker := types.NewMarker(prometheus.NewRegistry())
@@ -51,6 +50,7 @@ func TestEtcdWriteReadAlert(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// write and read back
 	a1 := fakeAlert()
 	if err := alerts.EtcdClient.Put(a1); err != nil {
 		t.Errorf("etcdPut failed: %s", err)
@@ -61,6 +61,16 @@ func TestEtcdWriteReadAlert(t *testing.T) {
 	}
 	if !alertsEqual(a1, a2) {
 		t.Errorf("Unexpected alert: %s", pretty.Compare(a1, a2))
+	}
+
+	// delete and read back
+	err = alerts.EtcdClient.Del(a1.Fingerprint())
+	if err != nil {
+		t.Errorf("etcdDel failed: %s", err)
+	}
+	_, err = alerts.EtcdClient.Get(a1.Fingerprint())
+	if err == nil {
+		t.Errorf("etcdGet SHOULD HAVE failed")
 	}
 }
 
@@ -177,7 +187,7 @@ func etcdReset() {
 	}
 	defer cli.Close()
 
-	// delete the keys
+	// delete all keys with prefix
 	_, err = cli.Delete(context.Background(), etcdPrefix, clientv3.WithPrefix())
 	if err != nil {
 		fmt.Printf("error: %v\n", err)

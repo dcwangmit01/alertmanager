@@ -145,30 +145,6 @@ func (ec *EtcdClient) CheckAndPut(alert *types.Alert) error {
 	return ec.Put(alert)
 }
 
-func (ec *EtcdClient) Put(alert *types.Alert) error {
-	// We do a best effort.  If etcd is not initialized yet, then skip
-	if ec.client == nil {
-		level.Error(ec.logger).Log("msg", "Not putting alert to etcd, etcd not initialized yet")
-		return ErrorEtcdNotInitialized
-	}
-
-	fp := alert.Fingerprint()
-	alertStr, err := MarshallAlert(alert)
-	if err != nil {
-		level.Error(ec.logger).Log("msg", "Error marshalling JSON Alert", "err", err)
-		return err
-	}
-
-	ec.mtx.Lock()
-	_, err = ec.client.Put(context.TODO(), ec.prefix+fp.String(), alertStr)
-	ec.mtx.Unlock()
-	if err != nil {
-		level.Error(ec.logger).Log("msg", "Error putting alert to etcd", "err", err)
-		return err
-	}
-	return nil
-}
-
 func (ec *EtcdClient) Get(fp model.Fingerprint) (*types.Alert, error) {
 	// We do a best effort.  If etcd is not initialized yet, then skip
 	if ec.client == nil {
@@ -176,7 +152,7 @@ func (ec *EtcdClient) Get(fp model.Fingerprint) (*types.Alert, error) {
 		return nil, ErrorEtcdNotInitialized
 	}
 
-	// ensure the get operation does not take too long
+	// ensure the operation does not take too long
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
@@ -199,6 +175,55 @@ func (ec *EtcdClient) Get(fp model.Fingerprint) (*types.Alert, error) {
 	}
 
 	return alert, nil
+}
+
+func (ec *EtcdClient) Put(alert *types.Alert) error {
+	// We do a best effort.  If etcd is not initialized yet, then skip
+	if ec.client == nil {
+		level.Error(ec.logger).Log("msg", "Not putting alert to etcd, etcd not initialized yet")
+		return ErrorEtcdNotInitialized
+	}
+
+	fp := alert.Fingerprint()
+	alertStr, err := MarshallAlert(alert)
+	if err != nil {
+		level.Error(ec.logger).Log("msg", "Error marshalling JSON Alert", "err", err)
+		return err
+	}
+
+	// ensure the operation does not take too long
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	ec.mtx.Lock()
+	_, err = ec.client.Put(ctx, ec.prefix+fp.String(), alertStr)
+	ec.mtx.Unlock()
+	if err != nil {
+		level.Error(ec.logger).Log("msg", "Error putting alert to etcd", "err", err)
+		return err
+	}
+	return nil
+}
+
+func (ec *EtcdClient) Del(fp model.Fingerprint) error {
+	// We do a best effort.  If etcd is not initialized yet, then skip
+	if ec.client == nil {
+		level.Error(ec.logger).Log("msg", "Not deleting alert from etcd, etcd not initialized yet")
+		return ErrorEtcdNotInitialized
+	}
+
+	// ensure the operation does not take too long
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	ec.mtx.Lock()
+	_, err := ec.client.Delete(ctx, ec.prefix+fp.String())
+	ec.mtx.Unlock()
+	if err != nil {
+		level.Error(ec.logger).Log("msg", "Error deleting alert from etcd", "err", err)
+		return err
+	}
+	return nil
 }
 
 func (ec *EtcdClient) RunWatch(ctx context.Context) {
