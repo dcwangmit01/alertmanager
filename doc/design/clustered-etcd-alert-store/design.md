@@ -135,13 +135,16 @@ watch -n 1 'amtool alert query --alertmanager.url=http://192.168.100.20:9093'
 watch -n 1 'amtool alert query --alertmanager.url=http://192.168.100.21:9093'
 
 # Send an alert to one Alertmanager instance
-amtool alert add --alertmanager.url=http://192.168.100.20:9093 time="$(date)"
+amtool alert add --alertmanager.url=http://192.168.100.20:9093 --start="$(date --iso-8601=seconds)" --end="$(date -d '+1 minute' --iso-8601=seconds)" time="$(date --iso-8601=seconds)"
 
 # Verify
 #   The same alert that was sent to the one Alertmanager instance should have
 #     shown up in Etcd as well as the other alertmanager instance.
+#   After one minute, the alert should have timed out from both alertmanager
+#     alert state.
+#   Shortly afterwards, the AM garbage collector should kick in and the alert
+#     will be deleted from Etcd.
 
 # Cleanup
 docker system prune -af
 ```
-
