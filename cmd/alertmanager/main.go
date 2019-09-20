@@ -339,7 +339,7 @@ func run() int {
 		alerts = etcdAlerts
 		go func() {
 			// delay start the run etcd loops so subscribers have time to initialize
-			time.Sleep(5 * time.Second)
+			time.Sleep(15 * time.Second)
 			etcdAlerts.EtcdClient.RunWatch(context.Background())
 			etcdAlerts.EtcdClient.RunLoadAllAlerts(context.Background())
 		}()

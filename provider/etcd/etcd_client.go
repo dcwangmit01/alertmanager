@@ -11,45 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-
-How the Etcd Alerts Storage Provider Works
-
-Initialization (Synchronous)
-
-* On startup, Alertmanager tries to connect to Etcd.  If the connection attempt
-  is unsuccessful after a timeout, then Alertmanager fails hard because it is
-  probably a configuration error.  A supervisor such as Kuberntes should
-  restart it.
-
-* Once Alertmanager successfully connects to Etcd, it proceeds with a "best
-  effort" to write alerts to Etcd as well receive alert updates Etcd via a
-  watch client.  If Etcd disappears for any reason (e.g. network partition,
-  quorum loss, etc.), Alertmanager will continue running independently to
-  maintain availability.  Once connectivity to Etcd is restored, Alertmanager
-  will resume writing alerts to Etcd and receiving alert updates from Etcd.
-
-* Alertmanager starts an Etcd watch client to receive alert updates from Etcd.
-  As other Alertmanager in the Alertmanager cluster write to Etcd, all of the
-  Alertmanagers receives those updates.
-
-* For the last part of initialization, Etcd will proceed to read all alert
-  objects from Etcd.
-
-Ongoing Operation (Async)
-
-* Alertmanager can receive alerts from both API requests AND the Etcd watch
-  subscription.  Alerts from both of these sources are sent to the etcd alert
-  provider via Put().  The alert is put into Etcd only when there is a
-  difference between the Etcd alert and memory.
-
-* The Etcd clientv3 library will automatically reconnect if the Etcd server
-  goes down or up, or upon resuming network connectivity if it had been lost.
-
-* The long running watch subscription will reconnect if the watch channel is
-  closed.
-
-*/
 
 package etcd
 
