@@ -1,3 +1,4 @@
+---
 global:
   resolve_timeout: 5m
 
@@ -9,4 +10,4 @@ route:
   receiver: 'noop-receiver'
 
 receivers:
-- name: 'noop-receiver'
+  name: 'noop-receiver'

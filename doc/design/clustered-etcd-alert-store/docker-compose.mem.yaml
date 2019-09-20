@@ -1,3 +1,4 @@
+---
 version: '3.7'
 
 services:
@@ -22,32 +23,34 @@ services:
   alertmanager0:
     image: prom/alertmanager:latest
     command:
-    - --config.file=/etc/alertmanager/alertmanager.yml
-    - --web.listen-address=:9093
-    - --cluster.listen-address=:9094
-    - --cluster.advertise-address=:9094
-    - --cluster.peer=alertmanager0:9094
-    - --log.level=debug
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --web.listen-address=:9093
+      - --cluster.listen-address=:9094
+      - --cluster.advertise-address=:9094
+      - --cluster.peer=alertmanager0:9094
+      - --alerts.gc-interval=1m
+      - --log.level=debug
     ports:
-       - 9001:9093
+      - 9001:9093
     volumes:
-    - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     networks:
       net1:
         ipv4_address: 192.168.100.20
   alertmanager1:
     image: prom/alertmanager:latest
     command:
-    - --config.file=/etc/alertmanager/alertmanager.yml
-    - --web.listen-address=:9093
-    - --cluster.listen-address=:9094
-    - --cluster.advertise-address=:9094
-    - --cluster.peer=alertmanager0:9094
-    - --log.level=debug
-    ports: 
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --web.listen-address=:9093
+      - --cluster.listen-address=:9094
+      - --cluster.advertise-address=:9094
+      - --cluster.peer=alertmanager0:9094
+      - --alerts.gc-interval=1m
+      - --log.level=debug
+    ports:
       - 9002:9093
     volumes:
-    - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     networks:
       net1:
         ipv4_address: 192.168.100.21
@@ -58,4 +61,4 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: 192.168.100.0/24
+        - subnet: 192.168.100.0/24
