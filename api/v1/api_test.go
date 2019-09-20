@@ -25,13 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/common/model"
+	"github.com/stretchr/testify/require"
+
 	"github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/alertmanager/dispatch"
+	"github.com/prometheus/alertmanager/pkg/labels"
 	"github.com/prometheus/alertmanager/provider"
 	"github.com/prometheus/alertmanager/types"
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/stretchr/testify/require"
 )
 
 // fakeAlerts is a struct implementing the provider.Alerts interface for tests.
@@ -61,6 +62,7 @@ func (f *fakeAlerts) Get(model.Fingerprint) (*types.Alert, error) { return nil, 
 func (f *fakeAlerts) Put(alerts ...*types.Alert) error {
 	return f.err
 }
+func (f *fakeAlerts) Close() {}
 func (f *fakeAlerts) GetPending() provider.AlertIterator {
 	ch := make(chan *types.Alert)
 	done := make(chan struct{})
