@@ -194,7 +194,6 @@ func (ec *EtcdClient) Del(fp model.Fingerprint) error {
 	_, err := ec.client.Delete(ctx, ec.prefix+fp.String())
 	ec.mtx.Unlock()
 	if err != nil {
-		level.Error(ec.logger).Log("msg", "Error deleting alert from etcd", "err", err)
 		return err
 	}
 	return nil
@@ -235,7 +234,7 @@ func (ec *EtcdClient) RunLoadAllAlerts(ctx context.Context) {
 			if err != nil {
 				level.Error(ec.logger).Log("msg", "Error fetching all alerts etcd", "err", err)
 				time.Sleep(5 * time.Second)
-				continue
+				continue // retry
 			}
 
 			for _, ev := range resp.Kvs {
@@ -243,11 +242,11 @@ func (ec *EtcdClient) RunLoadAllAlerts(ctx context.Context) {
 					"key", fmt.Sprintf("%q", ev.Key), "value", fmt.Sprintf("%q", ev.Value))
 				alert, err := UnmarshalAlert(string(ev.Value))
 				if err != nil {
-					continue
+					continue // retry
 				}
 				_ = ec.alerts.Put(alert) // best effort only
 			}
-			break
+			return // we only need to load all of the alerts once
 		}
 	}()
 }
