@@ -10,4 +10,4 @@ route:
   receiver: 'noop-receiver'
 
 receivers:
-  name: 'noop-receiver'
+  - name: 'noop-receiver'
