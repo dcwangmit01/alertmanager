@@ -128,7 +128,7 @@ func TestAlertsSubscribePutStarvation(t *testing.T) {
 	}()
 
 	// Increase probability that `iterator.Close` is called after `alerts.Put`.
-	time.Sleep(1000 * time.Millisecond) // ensure enough time to write all alerts to etcd
+	time.Sleep(2000 * time.Millisecond) // ensure enough time to write all alerts to etcd
 	iterator.Close()
 
 	select {

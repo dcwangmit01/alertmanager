@@ -202,7 +202,7 @@ func TestEtcdGC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testDuration := 3000 * time.Millisecond
+	testDuration := 2000 * time.Millisecond
 	startsAt := time.Now()
 	endsAt := t0.Add(testDuration)
 
@@ -223,7 +223,7 @@ func TestEtcdGC(t *testing.T) {
 		t.Errorf("Unexpected alert: %s", pretty.Compare(a1, a2))
 	}
 
-	time.Sleep(testDuration/2 + alertGcInterval*2)
+	time.Sleep(testDuration/2 + alertGcInterval*4)
 
 	// ensure expiration in etcd
 	_, err = alerts.EtcdClient.Get(a1.Fingerprint())
