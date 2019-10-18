@@ -81,10 +81,9 @@ type EtcdClient struct {
 	timeoutGet      time.Duration
 	timeoutPut      time.Duration
 	retryFailureGet time.Duration
-	alertSigDiff    time.Duration
 }
 
-func NewEtcdClient(ctx context.Context, a *Alerts, endpoints []string, prefix string, timeoutGet time.Duration, timeoutPut time.Duration, retryFailureGet time.Duration, alertSigDiff time.Duration) (*EtcdClient, error) {
+func NewEtcdClient(ctx context.Context, a *Alerts, endpoints []string, prefix string, timeoutGet time.Duration, timeoutPut time.Duration, retryFailureGet time.Duration) (*EtcdClient, error) {
 
 	ec := &EtcdClient{
 		alerts:          a,
@@ -94,7 +93,6 @@ func NewEtcdClient(ctx context.Context, a *Alerts, endpoints []string, prefix st
 		timeoutGet:      timeoutGet,
 		timeoutPut:      timeoutPut,
 		retryFailureGet: retryFailureGet,
-		alertSigDiff:    alertSigDiff,
 	}
 
 	// create the configuration
@@ -319,9 +317,9 @@ func (ec *EtcdClient) RunLoadAllAlerts(ctx context.Context) {
 }
 
 func (ec *EtcdClient) alertsShouldWriteToEtcd(a *types.Alert, o *types.Alert) bool {
-	// Check if the alerts are "different" enough.
-	// If alerts ARE "different" enough then return 'true' in order to write to Etcd
-	// If alerts are NOT "different" enough then return 'false' to skip writing to etcd
+	// Check if the alerts are different
+	// If alerts ARE "different" then return 'true' in order to write to Etcd
+	// If alerts are NOT "different" then return 'false' to skip writing to etcd
 
 	if a == nil || o == nil {
 		return true
@@ -338,13 +336,6 @@ func (ec *EtcdClient) alertsShouldWriteToEtcd(a *types.Alert, o *types.Alert) bo
 	if !a.StartsAt.Equal(o.StartsAt) {
 		return true
 	}
-
-	// Write to etcd if EndsAt's are "different" enough
-	if (a.EndsAt.Before(o.EndsAt) && o.EndsAt.Sub(a.EndsAt) > ec.alertSigDiff) || (o.EndsAt.Before(a.EndsAt) && a.EndsAt.Sub(o.EndsAt) > ec.alertSigDiff) {
-		// Update because EndsAt is different enough
-		return true
-	}
-
 	// we explicitly ignore UpdatedAt
 	// if !a.UpdatedAt.Equal(o.UpdatedAt) {
 	// 	return true
