@@ -50,7 +50,7 @@ type listeningAlerts struct {
 
 // NewAlerts returns a new alert provider.
 func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l log.Logger,
-	etcdEndpoints []string, etcdPrefix string, timeoutGet time.Duration, timeoutPut time.Duration, retryFailureGet time.Duration, alertSigDiff time.Duration) (*Alerts, error) {
+	etcdEndpoints []string, etcdPrefix string, timeoutGet time.Duration, timeoutPut time.Duration, retryFailureGet time.Duration) (*Alerts, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	a := &Alerts{
@@ -85,7 +85,7 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l 
 	a.alerts.Run(ctx, intervalGC)
 
 	// initialize etcd client
-	etcdClient, err := NewEtcdClient(ctx, a, etcdEndpoints, etcdPrefix, timeoutGet, timeoutPut, retryFailureGet, alertSigDiff)
+	etcdClient, err := NewEtcdClient(ctx, a, etcdEndpoints, etcdPrefix, timeoutGet, timeoutPut, retryFailureGet)
 	if err != nil {
 		return nil, err
 	}
@@ -175,8 +175,7 @@ func (a *Alerts) put(fromEtcd bool, alerts ...*types.Alert) error {
 		// Check that there's an alert existing within the store before
 		// trying to merge.
 		var old *types.Alert
-		var err error
-		if old, err = a.alerts.Get(fp); err == nil {
+		if old, err := a.alerts.Get(fp); err == nil {
 			// Merge alerts if there is an overlap in activity range.
 			if (alert.EndsAt.After(old.StartsAt) && alert.EndsAt.Before(old.EndsAt)) ||
 				(alert.StartsAt.After(old.StartsAt) && alert.StartsAt.Before(old.EndsAt)) {
