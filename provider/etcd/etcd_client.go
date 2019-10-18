@@ -272,7 +272,7 @@ func (ec *EtcdClient) RunWatch(ctx context.Context) {
 						level.Warn(ec.logger).Log("msg", "Watch received Unmarshalled alert with empty LabelSet")
 						continue
 					}
-					_ = ec.alerts.Put(alert) // best effort only
+					_ = ec.alerts.PutFromEtcd(alert) // best effort only
 				} else if ev.Type.String() == "DELETE" { // ignore DELETE operations
 					etcdWatchOperationsTotal.With(prometheus.Labels{"operation": "del"}).Inc()
 				} // else, ignore all other etcd operations, especially DELETE
@@ -303,7 +303,7 @@ func (ec *EtcdClient) RunLoadAllAlerts(ctx context.Context) {
 					continue // retry
 				}
 				count += 1
-				_ = ec.alerts.Put(alert) // best effort only
+				_ = ec.alerts.PutFromEtcd(alert) // best effort only
 			}
 			level.Info(ec.logger).Log("msg", "Etcd Load All Alerts Finished", "count", count)
 			return // we only need to load all of the alerts once

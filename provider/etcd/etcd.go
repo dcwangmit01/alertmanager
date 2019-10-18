@@ -160,6 +160,14 @@ func (a *Alerts) Get(fp model.Fingerprint) (*types.Alert, error) {
 
 // Put adds the given alert to the set.
 func (a *Alerts) Put(alerts ...*types.Alert) error {
+	return a.put(false, alerts...)
+}
+
+func (a *Alerts) PutFromEtcd(alerts ...*types.Alert) error {
+	return a.put(true, alerts...)
+}
+
+func (a *Alerts) put(fromEtcd bool, alerts ...*types.Alert) error {
 
 	for _, alert := range alerts {
 		fp := alert.Fingerprint()
@@ -180,9 +188,12 @@ func (a *Alerts) Put(alerts ...*types.Alert) error {
 			level.Error(a.logger).Log("msg", "error on set alert", "err", err)
 			continue
 		}
-		// best effort only; if there are errors, log and move on
-		if err := a.EtcdClient.CheckAndPut(old, alert); err != nil {
-			level.Error(a.logger).Log("msg", "error on put to etcd", "err", err)
+
+		if !fromEtcd {
+			// best effort only; if there are errors, log and move on
+			if err := a.EtcdClient.CheckAndPut(old, alert); err != nil {
+				level.Error(a.logger).Log("msg", "error on put to etcd", "err", err)
+			}
 		}
 
 		a.mtx.Lock()
