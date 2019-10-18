@@ -192,8 +192,9 @@ func run() int {
 		alertEtcdPrefix      = kingpin.Flag("alerts.etcd.prefix", "String prefix for storing AM alerts in etc").Default("am/alerts-").String()
 		etcdTimeoutGet       = kingpin.Flag("etcd.timeout.get", "Timeout for GET from etcd").Default("150ms").Duration()
 		etcdTimeoutPut       = kingpin.Flag("etcd.timeout.put", "Timeout for PUT to etcd").Default("250ms").Duration()
-		etcdDelayRunLoop     = kingpin.Flag("etcd.delay.run-loop", "Delay before running the etcd run-loop after startup").Default("15s").Duration()
-		etcdRetryFailureGet  = kingpin.Flag("etcd.retry.get", "Delay before retrying etcd GET failure").Default("5s").Duration()
+		etcdTimeoutDel       = kingpin.Flag("etcd.timeout.del", "Timeout for DEL to etcd").Default("250ms").Duration()
+		etcdDelayRunLoop     = kingpin.Flag("etcd.delay.run-loop", "Delay before running etcd run-loops after startup").Default("10s").Duration()
+		etcdRetryFailureLoad = kingpin.Flag("etcd.retry.load", "Delay before retrying failures of loading all alerts from etcd").Default("5s").Duration()
 
 		externalURL    = kingpin.Flag("web.external-url", "The URL under which Alertmanager is externally reachable (for example, if Alertmanager is served via a reverse proxy). Used for generating relative and absolute links back to Alertmanager itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Alertmanager. If omitted, relevant URL components will be derived automatically.").String()
 		routePrefix    = kingpin.Flag("web.route-prefix", "Prefix for the internal routes of web endpoints. Defaults to path of --web.external-url.").String()
@@ -335,7 +336,7 @@ func run() int {
 			return 1
 		}
 	} else if *alertStorageProvider == "etcd" {
-		etcdAlerts, err := etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdEndpoints, *alertEtcdPrefix, *etcdTimeoutGet, *etcdTimeoutPut, *etcdRetryFailureGet)
+		etcdAlerts, err := etcd.NewAlerts(context.Background(), marker, *alertGCInterval, logger, *alertEtcdEndpoints, *alertEtcdPrefix, *etcdTimeoutGet, *etcdTimeoutPut, *etcdTimeoutDel, *etcdRetryFailureLoad)
 		if err != nil {
 			level.Error(logger).Log("err", err)
 			return 1

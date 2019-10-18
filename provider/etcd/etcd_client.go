@@ -72,27 +72,29 @@ var (
 )
 
 type EtcdClient struct {
-	alerts          *Alerts
-	endpoints       []string
-	prefix          string
-	logger          log.Logger
-	client          *clientv3.Client
-	mtx             sync.Mutex
-	timeoutGet      time.Duration
-	timeoutPut      time.Duration
-	retryFailureGet time.Duration
+	alerts           *Alerts
+	endpoints        []string
+	prefix           string
+	logger           log.Logger
+	client           *clientv3.Client
+	mtx              sync.Mutex
+	timeoutGet       time.Duration
+	timeoutPut       time.Duration
+	timeoutDel       time.Duration
+	retryFailureLoad time.Duration
 }
 
-func NewEtcdClient(ctx context.Context, a *Alerts, endpoints []string, prefix string, timeoutGet time.Duration, timeoutPut time.Duration, retryFailureGet time.Duration) (*EtcdClient, error) {
+func NewEtcdClient(ctx context.Context, a *Alerts, endpoints []string, prefix string, timeoutGet time.Duration, timeoutPut time.Duration, timeoutDel time.Duration, retryFailureLoad time.Duration) (*EtcdClient, error) {
 
 	ec := &EtcdClient{
-		alerts:          a,
-		endpoints:       endpoints,
-		prefix:          prefix,
-		logger:          log.With(a.logger, "component", "provider.etcd"),
-		timeoutGet:      timeoutGet,
-		timeoutPut:      timeoutPut,
-		retryFailureGet: retryFailureGet,
+		alerts:           a,
+		endpoints:        endpoints,
+		prefix:           prefix,
+		logger:           log.With(a.logger, "component", "provider.etcd"),
+		timeoutGet:       timeoutGet,
+		timeoutPut:       timeoutPut,
+		timeoutDel:       timeoutDel,
+		retryFailureLoad: retryFailureLoad,
 	}
 
 	// create the configuration
@@ -234,7 +236,7 @@ func (ec *EtcdClient) Del(fp model.Fingerprint) error {
 	}
 
 	// ensure the operation does not take too long
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), ec.timeoutDel)
 	defer cancel()
 
 	ec.mtx.Lock()
@@ -296,7 +298,7 @@ func (ec *EtcdClient) RunLoadAllAlerts(ctx context.Context) {
 			ec.mtx.Unlock()
 			if err != nil {
 				level.Error(ec.logger).Log("msg", "Error fetching all alerts etcd", "err", err)
-				time.Sleep(ec.retryFailureGet)
+				time.Sleep(ec.retryFailureLoad)
 				continue // retry
 			}
 

@@ -50,7 +50,7 @@ type listeningAlerts struct {
 
 // NewAlerts returns a new alert provider.
 func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l log.Logger,
-	etcdEndpoints []string, etcdPrefix string, timeoutGet time.Duration, timeoutPut time.Duration, retryFailureGet time.Duration) (*Alerts, error) {
+	etcdEndpoints []string, etcdPrefix string, timeoutGet time.Duration, timeoutPut time.Duration, timeoutDel time.Duration, retryFailureLoad time.Duration) (*Alerts, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	a := &Alerts{
@@ -85,7 +85,7 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration, l 
 	a.alerts.Run(ctx, intervalGC)
 
 	// initialize etcd client
-	etcdClient, err := NewEtcdClient(ctx, a, etcdEndpoints, etcdPrefix, timeoutGet, timeoutPut, retryFailureGet)
+	etcdClient, err := NewEtcdClient(ctx, a, etcdEndpoints, etcdPrefix, timeoutGet, timeoutPut, timeoutDel, retryFailureLoad)
 	if err != nil {
 		return nil, err
 	}

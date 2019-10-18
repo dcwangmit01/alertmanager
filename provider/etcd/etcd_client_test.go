@@ -38,11 +38,11 @@ var (
 	etcdPrefix      = "am/test/alerts-"
 	alertGcInterval = 200 * time.Millisecond
 
-	etcdLogger          log.Logger
-	etcdTimeoutGet      = 150 * time.Millisecond
-	etcdTimeoutPut      = 250 * time.Millisecond
-	etcdRetryFailureGet = 5 * time.Second
-	etcdAlertSigDiff    = 30 * time.Second
+	etcdLogger           log.Logger
+	etcdTimeoutGet       = 150 * time.Millisecond
+	etcdTimeoutPut       = 250 * time.Millisecond
+	etcdTimeoutDel       = 250 * time.Millisecond
+	etcdRetryFailureLoad = 5 * time.Second
 )
 
 func init() {
@@ -61,7 +61,7 @@ func TestEtcdWriteReadDeleteAlert(t *testing.T) {
 
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
-		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdRetryFailureGet, etcdAlertSigDiff)
+		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdTimeoutDel, etcdRetryFailureLoad)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestEtcdRunWatch(t *testing.T) {
 
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
-		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdRetryFailureGet, etcdAlertSigDiff)
+		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdTimeoutDel, etcdRetryFailureLoad)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestEtcdRunLoadAllAlerts(t *testing.T) {
 
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
-		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdRetryFailureGet, etcdAlertSigDiff)
+		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdTimeoutDel, etcdRetryFailureLoad)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestEtcdGC(t *testing.T) {
 
 	marker := types.NewMarker(prometheus.NewRegistry())
 	alerts, err := NewAlerts(context.Background(), marker, alertGcInterval, etcdLogger,
-		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdRetryFailureGet, etcdAlertSigDiff)
+		etcdEndpoints, etcdPrefix, etcdTimeoutGet, etcdTimeoutPut, etcdTimeoutDel, etcdRetryFailureLoad)
 	if err != nil {
 		t.Fatal(err)
 	}
